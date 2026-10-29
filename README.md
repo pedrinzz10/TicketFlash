@@ -111,6 +111,30 @@ newman run TicketFlash.postman_collection.json
 
 A execução cria eventos e reservas e renomeia o Rock in Concert. Rode o seed de novo antes de gravar o vídeo.
 
+## Testes
+
+O `tests/smoke_test.py` testa a API de ponta a ponta (eventos, reservas, pedidos, relatórios, explain, e-mail duplicado e Pub/Sub) e confere o estado real do MongoDB e do Redis. Ele roda dentro do container da API:
+
+```bash
+docker compose exec api python tests/smoke_test.py
+```
+
+- **Suba com `RESERVA_TTL=15`** para o teste do **410** (reserva expirada) não esperar 10 minutos. Depois de editar o teste, suba com `--build` para a imagem receber o arquivo novo:
+
+  ```bash
+  RESERVA_TTL=15 docker compose up -d --build      # PowerShell: $env:RESERVA_TTL=15; docker compose up -d --build
+  ```
+
+- **Rode o seed de novo depois do teste**, porque ele deixa eventos, usuários e pedidos extras no banco:
+
+  ```bash
+  docker compose exec api python seed.py
+  ```
+
+- Para voltar ao TTL normal de 10 minutos, suba sem a variável (PowerShell: `Remove-Item Env:RESERVA_TTL; docker compose up -d`).
+
+O teste leva cerca de 2 minutos e termina com `N de N passaram` (código de saída 0 quando todos passam).
+
 ## Modelagem
 
 ### MongoDB
