@@ -6,7 +6,7 @@ API de venda de ingressos (Checkpoint 3) com **FastAPI**, **MongoDB** como fonte
 
 | Nome | RM |
 | --- | --- |
-| Pedro Henrique de Oliveira | RM00000 |
+| Pedro Henrique de Oliveira | RM562312 |
 | _Nome do integrante_ | RM00000 |
 | _Nome do integrante_ | RM00000 |
 
