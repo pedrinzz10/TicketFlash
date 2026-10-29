@@ -219,4 +219,4 @@ requirements.txt
 ## Entrega
 
 - Repositório: https://github.com/pedrinzz10/TicketFlash
-- Vídeo: _link do vídeo_
+- Vídeo: não gravado
