@@ -276,6 +276,49 @@ def testar_concorrencia() -> None:
           final == capacidade and pedidos == capacidade, f"vendidos {final}, pedidos {pedidos}")
 
 
+# ---------------------------------------------------------------- Relatórios e índices
+
+def testar_relatorios(rock_id: str) -> None:
+    print("\nRelatórios, explain e e-mail duplicado")
+
+    resp = api("GET", "/relatorios/faturamento")
+    faturamento = resp.json()
+    check("GET /relatorios/faturamento → 200 com lista não vazia",
+          resp.status_code == 200 and faturamento, f"{resp.status_code} {resp.text[:200]}")
+    valores = [item["faturamento"] for item in faturamento]
+    check("faturamento ordenado do maior para o menor", valores == sorted(valores, reverse=True), f"{valores}")
+    check("cada item do faturamento tem nome", all(item.get("nome") for item in faturamento), f"{faturamento}")
+    primeiro = faturamento[0]
+    soma = sum(p["valorTotal"] for p in db.pedidos.find(
+        {"eventoId": ObjectId(primeiro["eventoId"]), "status": "confirmado"}))
+    check("total do primeiro evento = soma dos valorTotal dos pedidos confirmados dele",
+          round(soma, 2) == primeiro["faturamento"],
+          f"API {primeiro['faturamento']}, soma no banco {round(soma, 2)}")
+
+    resp = api("GET", f"/relatorios/ocupacao/{rock_id}")
+    ocupacao = resp.json()
+    setores = db.eventos.find_one({"_id": ObjectId(rock_id)})["setores"]
+    check("GET /relatorios/ocupacao/{id} → 200 com um item por setor",
+          resp.status_code == 200 and len(ocupacao) == len(setores)
+          and {i["setor"] for i in ocupacao} == {s["nome"] for s in setores},
+          f"{resp.status_code} {ocupacao}")
+    check("percentual == round(vendidos / capacidade * 100, 2) em todos os setores",
+          all(i["percentual"] == round(i["vendidos"] / i["capacidade"] * 100, 2) for i in ocupacao),
+          f"{ocupacao}")
+    resp = api("GET", f"/relatorios/ocupacao/{ObjectId()}")
+    check("ocupação de evento inexistente → 404", resp.status_code == 404, str(resp.status_code))
+
+    resp = api("GET", "/debug/explain", params={"categoria": "show"})
+    estagios = resp.json().get("estagios", [])
+    check("GET /debug/explain?categoria=show usa IXSCAN(categoria_1_data_1)",
+          "IXSCAN(categoria_1_data_1)" in estagios, f"{estagios}")
+    check("GET /debug/explain?categoria=show não tem COLLSCAN", "COLLSCAN" not in estagios, f"{estagios}")
+
+    resp = api("POST", "/usuarios", json={"nome": "Ana Souza", "email": "ana.souza@email.com", "cidade": "Recife"})
+    check("POST /usuarios com e-mail já cadastrado → 409", resp.status_code == 409,
+          f"{resp.status_code} {resp.text}")
+
+
 # ---------------------------------------------------------------- main
 
 def main() -> int:
@@ -288,7 +331,7 @@ def main() -> int:
         return 1
     rock_id = str(rock["_id"])
 
-    for secao in (testar_eventos, testar_reservas, testar_pedidos):
+    for secao in (testar_eventos, testar_reservas, testar_pedidos, testar_relatorios):
         try:
             secao(rock_id)
         except Exception as erro:
