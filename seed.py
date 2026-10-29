@@ -1,8 +1,10 @@
 """Popula o MongoDB com 10 eventos, 20 usuários e 50+ pedidos e limpa o Redis.
 
-Uso: docker compose exec api python seed.py
+Uso: docker compose exec api python seed.py              (apaga tudo e recria)
+     python seed.py --se-vazio                           (só popula se o banco estiver vazio; roda na subida da API)
 """
 import random
+import sys
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
@@ -47,6 +49,10 @@ NOMES = [
 
 
 def main() -> None:
+    if "--se-vazio" in sys.argv and db.eventos.estimated_document_count() > 0:
+        print("Banco já populado, seed ignorado.")
+        return
+
     for colecao in ("eventos", "usuarios", "pedidos"):
         db[colecao].delete_many({})
     r.flushdb()
