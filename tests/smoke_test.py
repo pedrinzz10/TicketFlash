@@ -5,6 +5,7 @@ Uso (dentro do container, onde MONGO_URL, REDIS_URL e RESERVA_TTL já estão def
 
 Rode o seed antes. O teste cria eventos, usuários e pedidos: rode o seed de novo antes de gravar o vídeo.
 """
+import json
 import os
 import sys
 import threading
@@ -319,6 +320,32 @@ def testar_relatorios(rock_id: str) -> None:
           f"{resp.status_code} {resp.text}")
 
 
+# ---------------------------------------------------------------- Pub/Sub
+
+def testar_pubsub(rock_id: str) -> None:
+    print("\nPub/Sub (bônus)")
+
+    pubsub = r.pubsub()
+    pubsub.subscribe("pedidos:confirmados")
+    try:
+        reserva_id = reservar(novo_usuario(), rock_id).json()["reservaId"]
+        pedido = confirmar(reserva_id).json()
+
+        mensagem = None
+        for _ in range(3):  # a 1ª leitura costuma ser a confirmação do subscribe, não a mensagem
+            recebida = pubsub.get_message(timeout=5)
+            if recebida and recebida["type"] == "message":
+                mensagem = recebida
+                break
+        check("mensagem recebida no canal pedidos:confirmados", mensagem is not None,
+              "nenhuma mensagem chegou em 15 s")
+        publicado = json.loads(mensagem["data"]) if mensagem else {}
+        check("a mensagem tem o mesmo id do pedido confirmado", publicado.get("id") == pedido.get("id"),
+              f"mensagem {publicado.get('id')} ≠ pedido {pedido.get('id')}")
+    finally:
+        pubsub.close()
+
+
 # ---------------------------------------------------------------- main
 
 def main() -> int:
@@ -331,7 +358,7 @@ def main() -> int:
         return 1
     rock_id = str(rock["_id"])
 
-    for secao in (testar_eventos, testar_reservas, testar_pedidos, testar_relatorios):
+    for secao in (testar_eventos, testar_reservas, testar_pedidos, testar_relatorios, testar_pubsub):
         try:
             secao(rock_id)
         except Exception as erro:
