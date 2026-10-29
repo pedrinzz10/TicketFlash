@@ -15,11 +15,18 @@ API de venda de ingressos (Checkpoint 3) com **FastAPI**, **MongoDB** como fonte
 Pré-requisito: Docker com Docker Compose.
 
 ```bash
-docker compose up -d --build              # sobe api, mongo e redis
-docker compose exec api python seed.py    # 10 eventos, 20 usuários, 51 pedidos
+docker compose up --build
 ```
 
-A API fica em http://localhost:8000 (Swagger em http://localhost:8000/docs). O seed apaga e recria os dados, limpa o Redis e imprime ids de exemplo para usar no `requests.http`.
+Esse único comando sobe os três serviços (api, mongo e redis). Na primeira subida, com o banco vazio, a API roda o `seed.py` sozinha e popula 10 eventos, 20 usuários e 51 pedidos. Nas subidas seguintes os dados são mantidos.
+
+A API fica em http://localhost:8000 (Swagger em http://localhost:8000/docs).
+
+Para voltar aos dados iniciais a qualquer momento, rode o seed manualmente. Ele apaga e recria os dados, limpa o Redis e imprime ids de exemplo para usar no `requests.http`:
+
+```bash
+docker compose exec api python seed.py
+```
 
 Comandos úteis para a demonstração:
 
@@ -30,10 +37,10 @@ docker compose exec redis redis-cli ZREVRANGE ranking:eventos 0 4 WITHSCORES
 docker compose exec api python subscriber.py                  # bônus Pub/Sub
 ```
 
-Para demonstrar o **410** sem esperar 10 minutos, suba com um TTL curto de reserva:
+Para demonstrar o **410** sem esperar 10 minutos, suba com um TTL curto de reserva (passo a passo em [Reserva expirada (410)](#reserva-expirada-410)):
 
 ```bash
-RESERVA_TTL=20 docker compose up -d      # PowerShell: $env:RESERVA_TTL=20; docker compose up -d
+RESERVA_TTL=15 docker compose up -d      # PowerShell: $env:RESERVA_TTL=15; docker compose up -d
 ```
 
 Variáveis de ambiente da API: `MONGO_URL` (padrão `mongodb://mongo:27017` no compose), `MONGO_DB`, `REDIS_URL` (`redis://redis:6379/0`) e `RESERVA_TTL` (padrão 600).
@@ -63,7 +70,7 @@ Todas as requisições estão em [`requests.http`](requests.http) e na coleção
 
 ### Como usar
 
-1. Suba o ambiente e rode o seed (veja [Como executar](#como-executar)).
+1. Suba o ambiente (veja [Como executar](#como-executar)). O seed roda sozinho na primeira subida.
 2. No Postman, vá em **Import** e selecione `TicketFlash.postman_collection.json`.
 3. Rode o request **0. Setup → Carregar ids do seed**. Ele preenche as variáveis da coleção `eventoId` (Rock in Concert), `usuarioId`, `outroUsuarioId` e `rateLimitUsuarioId`, sem precisar colar ids.
 4. Siga as pastas na ordem: **1. Eventos**, **2. Usuários**, **3. Reservas**, **4. Pedidos**, **5. Relatórios e índices**.
@@ -131,6 +138,8 @@ A execução cria eventos e reservas e renomeia o Rock in Concert. Rode o seed d
 Nada permanente fica só no Redis: se ele for zerado, perde-se apenas cache, ranking, contadores e reservas ainda não pagas.
 
 - **Confirmação idempotente:** `GETDEL` lê e apaga a reserva numa operação só; uma segunda confirmação (ou uma reserva expirada) recebe **410**.
+- **Ordem da confirmação:** `GETDEL` da reserva → `$inc` condicional em `vendidos` → grava o pedido. O incremento vem antes do pedido para nunca existir pedido sem vaga: se o `$inc` não casar (setor lotado), a API responde 409 e nada é gravado.
+- **Cache só onde há leitura repetida do mesmo dado:** o `GET /eventos/{id}` passa pelo Redis. A listagem com filtros e a checagem de vagas leem direto do MongoDB, porque as combinações de filtro variam e as vagas precisam do valor atual da fonte da verdade.
 - **Preço confiável:** o `valorTotal` é calculado com o `preco` do setor lido no MongoDB, nunca com valor vindo do cliente.
 - **Pub/Sub tolerante a falha:** um erro no `PUBLISH` é registrado no log e não desfaz o pedido já gravado.
 
@@ -172,9 +181,12 @@ app/
   db.py            # conexões, constantes, helpers de ObjectId e serialização
   schemas.py       # modelos Pydantic (validações 422)
   routers/         # eventos, usuarios, reservas, pedidos, relatorios, debug
-seed.py            # dados iniciais
+tests/
+  smoke_test.py    # teste de ponta a ponta contra a API no Docker
+seed.py            # dados iniciais (roda sozinho na primeira subida)
 subscriber.py      # consumidor do canal pedidos:confirmados
-requests.http      # todas as requisições
+requests.http      # todas as requisições (VS Code REST Client / JetBrains)
+TicketFlash.postman_collection.json   # coleção Postman com testes
 Dockerfile
 docker-compose.yml
 requirements.txt
@@ -182,5 +194,5 @@ requirements.txt
 
 ## Entrega
 
-- Repositório: _link do GitHub_
+- Repositório: https://github.com/pedrinzz10/TicketFlash
 - Vídeo: _link do vídeo_
