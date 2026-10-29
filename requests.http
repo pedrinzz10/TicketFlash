@@ -1,0 +1,118 @@
+### TicketFlash: todas as requisições (VS Code REST Client / JetBrains HTTP Client)
+# Depois do seed, cole os ids impressos (ou pegue em GET /eventos e GET /usuarios).
+
+@base = http://localhost:8000
+@eventoId = COLE_AQUI_O_ID_DO_EVENTO
+@usuarioId = COLE_AQUI_O_ID_DO_USUARIO
+@outroUsuarioId = COLE_AQUI_OUTRO_ID_DE_USUARIO
+@reservaId = COLE_AQUI_O_RESERVA_ID
+
+### UC-01 Criar evento (201)
+POST {{base}}/eventos
+Content-Type: application/json
+
+{
+  "nome": "Show de Lançamento",
+  "categoria": "show",
+  "data": "2026-12-05T20:00:00",
+  "local": {"cidade": "São Paulo", "endereco": "Av. Paulista, 1000"},
+  "atracoes": ["Banda Nova", "DJ Convidado"],
+  "setores": [
+    {"nome": "Pista", "preco": 150.0, "capacidade": 300},
+    {"nome": "VIP", "preco": 400.0, "capacidade": 50}
+  ]
+}
+
+### UC-01 Criar evento inválido: faltando campos (422)
+POST {{base}}/eventos
+Content-Type: application/json
+
+{"nome": "Sem setores"}
+
+### UC-01 Criar evento inválido: capacidade 0 e preço negativo (422)
+POST {{base}}/eventos
+Content-Type: application/json
+
+{
+  "nome": "Inválido", "categoria": "show", "data": "2026-12-05T20:00:00",
+  "local": {"cidade": "São Paulo", "endereco": "Rua A"},
+  "setores": [{"nome": "Pista", "preco": -10, "capacidade": 0}]
+}
+
+### UC-02 Listar todos os eventos
+GET {{base}}/eventos
+
+### UC-02 Filtrar por categoria
+GET {{base}}/eventos?categoria=show
+
+### UC-02 Filtrar por cidade
+GET {{base}}/eventos?cidade=Curitiba
+
+### UC-02 Filtros combinados
+GET {{base}}/eventos?categoria=show&cidade=Curitiba
+
+### UC-03 Consultar evento (1ª vez: origem banco; 2ª vez: origem cache)
+GET {{base}}/eventos/{{eventoId}}
+
+### UC-03 Id mal formatado (400)
+GET {{base}}/eventos/abc
+
+### UC-03 Id inexistente (404)
+GET {{base}}/eventos/000000000000000000000000
+
+### UC-04 Atualizar evento (invalida o cache)
+PUT {{base}}/eventos/{{eventoId}}
+Content-Type: application/json
+
+{"nome": "Rock in Concert (Edição Extra)", "atracoes": ["Banda Aurora", "Os Ventos", "Convidado Surpresa"]}
+
+### UC-05 Remover evento
+DELETE {{base}}/eventos/{{eventoId}}
+
+### UC-06 Ranking dos mais vistos
+GET {{base}}/eventos/ranking
+
+### Usuários (apoio: listar ids)
+GET {{base}}/usuarios
+
+### UC-13 Usuário com email duplicado (409, índice único)
+POST {{base}}/usuarios
+Content-Type: application/json
+
+{"nome": "Ana Duplicada", "email": "ana.souza@email.com", "cidade": "São Paulo"}
+
+### UC-07 Criar reserva (201)
+POST {{base}}/reservas
+Content-Type: application/json
+
+{"usuarioId": "{{usuarioId}}", "eventoId": "{{eventoId}}", "setor": "Pista", "quantidade": 2}
+
+### UC-07 Quantidade inválida (422)
+POST {{base}}/reservas
+Content-Type: application/json
+
+{"usuarioId": "{{usuarioId}}", "eventoId": "{{eventoId}}", "setor": "Pista", "quantidade": 0}
+
+### UC-07 Setor lotado (409): Backstage do evento de exemplo do seed
+POST {{base}}/reservas
+Content-Type: application/json
+
+{"usuarioId": "{{outroUsuarioId}}", "eventoId": "{{eventoId}}", "setor": "Backstage", "quantidade": 1}
+
+### UC-08 Consultar reserva e TTL restante
+GET {{base}}/reservas/{{reservaId}}
+
+### UC-09 Confirmar pedido (201; repetir dá 410)
+POST {{base}}/pedidos/confirmar
+Content-Type: application/json
+
+{"reservaId": "{{reservaId}}"}
+
+### UC-11 Faturamento por evento
+GET {{base}}/relatorios/faturamento
+
+### UC-12 Ocupação por setor
+GET {{base}}/relatorios/ocupacao/{{eventoId}}
+
+### UC-13 Explain da consulta por categoria ordenada por data
+GET {{base}}/debug/explain?categoria=show
