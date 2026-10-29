@@ -57,7 +57,52 @@ Variáveis de ambiente da API: `MONGO_URL` (padrão `mongodb://mongo:27017` no c
 | GET | `/usuarios` | Lista usuários (apoio para pegar ids) | 200 |
 | POST | `/usuarios` | Cria usuário; email repetido viola o índice único | 201, 409, 422 |
 
-Todas as requisições estão em [`requests.http`](requests.http).
+Todas as requisições estão em [`requests.http`](requests.http) e na coleção Postman [`TicketFlash.postman_collection.json`](TicketFlash.postman_collection.json).
+
+## Coleção Postman
+
+### Como usar
+
+1. Suba o ambiente e rode o seed (veja [Como executar](#como-executar)).
+2. No Postman, vá em **Import** e selecione `TicketFlash.postman_collection.json`.
+3. Rode o request **0. Setup → Carregar ids do seed**. Ele preenche as variáveis da coleção `eventoId` (Rock in Concert), `usuarioId`, `outroUsuarioId` e `rateLimitUsuarioId`, sem precisar colar ids.
+4. Siga as pastas na ordem: **1. Eventos**, **2. Usuários**, **3. Reservas**, **4. Pedidos**, **5. Relatórios e índices**.
+
+Sempre que rodar o seed de novo, rode o **0. Setup** outra vez, porque os ids mudam.
+
+### O que cada request faz sozinho
+
+| Request | Comportamento |
+| --- | --- |
+| UC-01 Criar evento | Salva o id em `novoEventoId`, usado pelos requests de DELETE. |
+| UC-03 Consultar evento (rode 2x) | 1ª execução responde `origem: banco`; a 2ª, em até 60 s, `origem: cache`. |
+| UC-04 Atualizar evento | Depois dele, o UC-03 volta a responder `origem: banco` com o nome novo. |
+| UC-07 Criar reserva | Salva o `reservaId` e mostra no Console o comando `TTL reserva:<id>` para o redis-cli. |
+| UC-07 Rate limit | O pre-request dispara 10 reservas do mesmo usuário (os códigos aparecem no Console) e o request é a 11ª, que dá **429**. Para repetir, espere 60 s. |
+| UC-09 Confirmar pedido | Confirma a reserva salva pelo UC-07. Rodar de novo dá **410**. |
+| UC-13 Explain | Confere que o plano usa `IXSCAN(categoria_1_data_1)` e não usa `COLLSCAN`. |
+
+Todos os requests têm teste do código de status esperado, exibido em **Test Results**. Os logs dos scripts ficam no **Console** (View → Show Postman Console).
+
+### Reserva expirada (410)
+
+Com o TTL padrão a reserva dura 10 minutos. Para demonstrar o 410 rapidamente:
+
+1. Suba a API com TTL curto. Só a API reinicia e os dados continuam.
+   - Git Bash: `RESERVA_TTL=15 docker compose up -d`
+   - PowerShell: `$env:RESERVA_TTL=15; docker compose up -d`
+2. Rode **UC-07 Criar reserva**, espere 15 s e rode **UC-09 Confirmar reserva expirada**.
+3. Volte ao TTL padrão. Git Bash: `docker compose up -d`. PowerShell: `Remove-Item Env:RESERVA_TTL; docker compose up -d`.
+
+### Rodar a coleção inteira
+
+No Postman, use **Run collection**. Pela linha de comando, com o [Newman](https://www.npmjs.com/package/newman):
+
+```bash
+newman run TicketFlash.postman_collection.json
+```
+
+A execução cria eventos e reservas e renomeia o Rock in Concert. Rode o seed de novo antes de gravar o vídeo.
 
 ## Modelagem
 
